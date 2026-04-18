@@ -145,7 +145,7 @@
   <!-- Chart 1: US Fatal Snake Bites by Year -->
   <div class="card">
     <h2>US Fatal Snake Bites by Year</h2>
-    <p class="desc">Wikipedia-documented fatalities. 2026 is through April 17. <span class="badge proj">2026 projected</span></p>
+    <p class="desc">Wikipedia-documented fatalities. 2026 projection uses seasonal weighting (Jan-Apr 17 = ~13% of annual bites). <span class="badge proj">2026 seasonal projection</span></p>
     <div class="chart-wrap"><canvas id="fatalUS"></canvas></div>
   </div>
 
@@ -166,7 +166,7 @@
   <!-- Chart 4: SoCal Bites -->
   <div class="card">
     <h2>Southern California Rattlesnake Bites</h2>
-    <p class="desc">Ventura + Orange County reported bites. 2026 is Jan–Apr 17 only. <span class="badge proj">2026 projected</span></p>
+    <p class="desc">Ventura + Orange County reported bites. 2026 seasonal projection from Mar 14 – Apr 17 data. <span class="badge proj">seasonal projection</span></p>
     <div class="chart-wrap"><canvas id="socalChart"></canvas></div>
   </div>
 
@@ -187,7 +187,7 @@
     <li><a href="https://poisoncenters.org/annual-reports/">AAPCC/NPDS Annual Reports</a> — poison center bite counts (2017: 4,071 pit viper; 2021: 3,775 total)</li>
     <li><a href="https://www.foxla.com/news/ventura-county-rattlesnake-bites-surge-2026">FOX 11: Ventura County rattlesnake bites surge 2026</a> — SoCal 2025/2026 data</li>
     <li><a href="https://nationaltoday.com/us/ca/irvine/news/2026/04/06/rattlesnake-bites-spike-across-southern-california/">Irvine Today: Rattlesnake bites spike across SoCal</a> — SoCal 2026 specifics</li>
-    <li><strong>2026 projections</strong> use linear extrapolation from Jan 1 – Apr 17 (29.6% of year elapsed) to full-year estimates.</li>
+    <li><strong>2026 projections</strong> use seasonal weighting from a 2016 study (n=11,138, PMC6887492): Winter 2%, Spring 22%, Summer 50%, Fall 26%. Jan 1 – Apr 17 covers ~12.8% of annual bites (not 29.6% as a linear model assumes), so projections are higher than naive linear extrapolation.</li>
     <li><strong>Interpolated years</strong> (marked ~) use linear interpolation between known NPDS data points.</li>
   </ul>
 </div>
@@ -199,8 +199,27 @@ const LABELS = YEARS.map(y => y === 2026 ? '2026*' : String(y));
 // --- Fatal US bites (Wikipedia) ---
 const fatalTotal =    [5, 1, 1, 2, 2, 1, 0, 4, 0, 0, 1, 2];
 const fatalRattle =   [3, 1, 1, 2, 1, 1, 0, 3, 0, 0, 1, 2];
-// 2026 projected: 2 in 107 days → ~6.8/yr
-const fatalProj2026 = Math.round(2 / (107/365) * 10) / 10;
+
+// --- Seasonal weighting model ---
+// Source: PMC6887492 (2016, n=11,138 US snakebites)
+// Winter (Dec-Feb): 2%, Spring (Mar-May): 22%, Summer (Jun-Aug): 50%, Fall (Sep-Nov): 26%
+// Monthly estimates (distributing evenly within each season):
+// Jan: 0.67%, Feb: 0.67%, Mar: 7.33%, Apr: 7.33%, May: 7.33%,
+// Jun: 16.67%, Jul: 16.67%, Aug: 16.67%, Sep: 8.67%, Oct: 8.67%, Nov: 8.67%, Dec: 0.67%
+const MONTHLY_WEIGHT = [0.0067, 0.0067, 0.0733, 0.0733, 0.0733,
+                        0.1667, 0.1667, 0.1667, 0.0867, 0.0867, 0.0867, 0.0067];
+
+// Cumulative weight through Apr 17 = Jan + Feb + Mar + (17/30)*Apr
+const cumWeightApr17 = 0.0067 + 0.0067 + 0.0733 + (17/30)*0.0733; // ≈ 0.128
+// So Jan 1 – Apr 17 covers ~12.8% of annual bites (not 29.6% as linear assumes)
+
+// Seasonal projection: actual / cumulative_weight_elapsed
+function seasonalProject(actual, cumWeight) {
+  return Math.round(actual / cumWeight * 10) / 10;
+}
+
+const fatalProj2026_linear = Math.round(2 / (107/365) * 10) / 10;  // 6.8
+const fatalProj2026_seasonal = seasonalProject(2, cumWeightApr17);   // ~15.6
 
 // --- NPDS pit viper bites (known data points, rest interpolated) ---
 // Known: 2017=4071, 2021=3775. Estimate others via trend + CDC 7000-8000 total
@@ -224,11 +243,16 @@ const npdsRattle = npdsBites.map(d => d.v ? Math.round(d.v * 0.32) : null);
 // --- SoCal data ---
 // Ventura+OC reported bites
 const socalBites = [null,null,null,null,null,null,null,null,null,null, 9, 6];
-// 2026 projected: 6 bites in ~34 days of season (Mar 14 – Apr 17) → full season (Apr-Oct = 214 days) ≈ 38
-const socalProj =  [null,null,null,null,null,null,null,null,null,null, 9, 38];
+// Seasonal projection: 6 bites occurred Mar 14 – Apr 17
+// Cumulative weight Mar 14 – Apr 17: (17/31)*Mar + (17/30)*Apr = (17/31)*0.0733 + (17/30)*0.0733 ≈ 0.0818
+const cumWeightSocal2026 = (17/31)*0.0733 + (17/30)*0.0733;
+const socalProj2026_seasonal = Math.round(6 / cumWeightSocal2026);  // ~73
+const socalProj2026_linear = 38;
+const socalProj =  [null,null,null,null,null,null,null,null,null,null, 9, socalProj2026_seasonal];
 
 // --- CA fatal ---
 const caFatal = [0,0,0,0,0,0,0,0,0,0,0,2];
+const caFatalProj2026_seasonal = seasonalProject(2, cumWeightApr17);
 
 // Shared config
 const gridColor = 'rgba(255,255,255,0.06)';
@@ -255,8 +279,8 @@ new Chart(document.getElementById('fatalUS'), {
         borderRadius: 4,
       },
       {
-        label: '2026 projected (full year)',
-        data: YEARS.map((y,i) => y === 2026 ? fatalProj2026 : null),
+        label: '2026 seasonal projection',
+        data: YEARS.map((y,i) => y === 2026 ? fatalProj2026_seasonal : null),
         backgroundColor: 'rgba(168,85,247,0.3)',
         borderColor: '#a855f7',
         borderWidth: 1,
@@ -364,7 +388,7 @@ new Chart(document.getElementById('socalChart'), {
         borderRadius: 4,
       },
       {
-        label: '2026 full-year projection',
+        label: '2026 seasonal projection',
         data: YEARS.map((y,i) => y === 2026 ? socalProj[i] - socalBites[i] : null),
         backgroundColor: 'rgba(168,85,247,0.35)',
         borderColor: '#a855f7',
@@ -400,8 +424,8 @@ new Chart(document.getElementById('caFatalChart'), {
         borderRadius: 4,
       },
       {
-        label: '2026 projected (full year)',
-        data: YEARS.map(y => y === 2026 ? Math.round(2 / (107/365) * 10) / 10 - 2 : null),
+        label: '2026 seasonal projection',
+        data: YEARS.map(y => y === 2026 ? caFatalProj2026_seasonal - 2 : null),
         backgroundColor: 'rgba(168,85,247,0.35)',
         borderRadius: 4,
       }
